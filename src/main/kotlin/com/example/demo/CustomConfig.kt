@@ -14,7 +14,6 @@ class CustomConfig : WebMvcConfigurationSupport() {
 
     @Bean
     fun authWebArgumentResolverFactory() : HandlerMethodArgumentResolver {
-        println("initializing web resolver")
         return AuthTokenWebResolver()
     }
 
@@ -33,7 +32,6 @@ class CustomConfig : WebMvcConfigurationSupport() {
 
     @Bean
     fun restTemplate(builder: RestTemplateBuilder): RestTemplate {
-        println("building")
         return builder.build()
     }
 }
