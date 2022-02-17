@@ -21,9 +21,9 @@ class OrderService(private val orderSource: OrderDataSource, private val userSou
         val user = userSource.findById(userId).get()
         val filteredOrders = orderSource.findAll().filter { it.type != order.type }.sortedBy { it.limit }
         val (bought,  spent) = if (order.type == OrderType.BUY)
-            executeBuyOrder(filteredOrders.filter { it.type == OrderType.SELL }, user, order.quantity, true)
+            executeOrder(filteredOrders.filter { it.type == OrderType.SELL }, user, order.quantity, order.type, Currency.USD,true)
         else
-            executeSellOrder(filteredOrders.filter { it.type == OrderType.SELL }, user, order.quantity, true)
+            executeOrder(filteredOrders.filter { it.type == OrderType.BUY }, user, order.quantity, order.type, Currency.BITCOIN, true)
 
         orderSource.flush()
         userSource.flush()
@@ -39,14 +39,12 @@ class OrderService(private val orderSource: OrderDataSource, private val userSou
 
         val quantity =  newOrder.quantity
         val p: Pair<Long, Long> = if(newOrder.type == OrderType.BUY) {
-            executeBuyOrder(filteredOrders.filter { it.type == OrderType.SELL }, user, quantity.toLong(), false)
+            executeOrder(filteredOrders.filter { it.type == OrderType.SELL }, user, quantity.toLong(), OrderType.BUY, Currency.USD,  false)
         }else{
-            executeSellOrder(filteredOrders.filter { it.type == OrderType.BUY }, user, (quantity*100000000).toLong(), false)
+            executeOrder(filteredOrders.filter { it.type == OrderType.BUY }, user, (quantity*100000000).toLong(), OrderType.SELL, Currency.BITCOIN, false)
         }
-
         var standingOrder = StandingOrder(quantity.toLong(), newOrder.type, newOrder.limit, user)
         standingOrder.fill(p.second)
-
         if(standingOrder.quantity > 0){
             standingOrder = orderSource.save(standingOrder)
         }
@@ -56,74 +54,47 @@ class OrderService(private val orderSource: OrderDataSource, private val userSou
 
     }
 
-    private fun executeSellOrder(filteredOrderBook: List<StandingOrder>, user: User, quantity: Long, isMarket: Boolean): Pair<Long, Long> {
-        val spendingCurrency = Currency.BITCOIN
+    private fun executeOrder(filteredOrderBook: List<StandingOrder>, user: User, quantity: Long, type: OrderType, spendingCurrency: Currency, isMarket: Boolean): Pair<Long, Long> {
         user.changeBalance(spendingCurrency, -quantity)
-        println("SELL ORDER")
-        var spentBitcoin = 0L
-        var boughtUSD = 0L
+        var spent = 0L
+        var bought = 0L
         for (o in filteredOrderBook){
-            if(spentBitcoin + o.quantity <= quantity){
-                spentBitcoin += 100000000*o.quantity/o.limit
-                println("$spentBitcoin")
-                o.user.changeBalance(spendingCurrency, 100000000*o.quantity/o.limit)
+            if(spent + o.quantity <= quantity){
+                if (type == OrderType.SELL) {
+                    spent += 100000000*o.quantity/o.limit
+                    o.user.changeBalance(spendingCurrency, 100000000*o.quantity/o.limit)
+                    bought += o.quantity
+                } else {
+                    spent += o.quantity
+                    o.user.changeBalance(spendingCurrency, o.quantity)
+                    bought += 100000000/(o.limit/o.quantity)
+                }
                 userSource.save(o.user)
-                boughtUSD += o.quantity
                 o.fill(o.quantity)
                 if (o.quantity == 0L) orderSource.delete(o) else orderSource.save(o)
             }else{
-                println("$quantity, $spentBitcoin, ${o.limit}")
-                boughtUSD += (quantity-spentBitcoin)
-                o.user.changeBalance(spendingCurrency, (quantity - spentBitcoin))
-                userSource.save(o.user)
-                o.fill(quantity - spentBitcoin)
-                if (o.quantity == 0L) orderSource.delete(o) else orderSource.save(o)
-                spentBitcoin = quantity
-                break
-            }
-        }
-        if(isMarket){
-            user.changeBalance(spendingCurrency, quantity-spentBitcoin)
-        }
-        println("bought ${spendingCurrency.pair()}: $boughtUSD spent ${spendingCurrency}: $spentBitcoin")
-        user.changeBalance(spendingCurrency.pair(), boughtUSD)
-        userSource.save(user)
-        return Pair(boughtUSD, spentBitcoin)
-    }
+                if (type == OrderType.SELL){
+                    bought += (quantity-spent)
+                    o.user.changeBalance(spendingCurrency, (quantity - spent))
 
-    private fun executeBuyOrder(filteredOrderBook: List<StandingOrder>, user: User, quantity: Long, isMarket: Boolean): Pair<Long, Long>{
-        val spendingCurrency = Currency.USD
-        user.changeBalance(spendingCurrency, -quantity)
-        println("BUY ORDER")
-        var spentUsd = 0L
-        var boughtBitcoin = 0L
-        for (o in filteredOrderBook){
-            println(o.id)
-            if(spentUsd + o.quantity <= quantity){
-                spentUsd += o.quantity
-                o.user.changeBalance(spendingCurrency, o.quantity)
+                } else{
+                    bought += 100000000/(o.limit/(quantity-spent))
+                    o.user.changeBalance(spendingCurrency, (quantity - spent))
+
+                }
                 userSource.save(o.user)
-                boughtBitcoin += 100000000/(o.limit/o.quantity)
-                o.fill(o.quantity)
+                o.fill(quantity - spent)
                 if (o.quantity == 0L) orderSource.delete(o) else orderSource.save(o)
-            }else{
-                println("${o.limit} $quantity, $spentUsd")
-                boughtBitcoin += 100000000/(o.limit/(quantity-spentUsd))
-                o.user.changeBalance(spendingCurrency, (quantity - spentUsd))
-                userSource.save(o.user)
-                o.fill(quantity - spentUsd)
-                if (o.quantity == 0L) orderSource.delete(o) else orderSource.save(o)
-                spentUsd = quantity
+                spent = quantity
                 break
             }
         }
-        if(isMarket){
-            user.changeBalance(spendingCurrency, quantity-spentUsd)
-        }
-        println("bought ${spendingCurrency.pair()}: $boughtBitcoin spent ${spendingCurrency}: $spentUsd")
-        user.changeBalance(spendingCurrency.pair(), boughtBitcoin)
+        if(isMarket) user.changeBalance(spendingCurrency, quantity-spent)
+
+        println("bought ${spendingCurrency.pair()}: $bought spent ${spendingCurrency}: $spent")
+        user.changeBalance(spendingCurrency.pair(), bought)
         userSource.save(user)
-        return Pair(boughtBitcoin, spentUsd)
+        return Pair(bought, spent)
     }
 
     fun deleteStandingOrder(orderId: Long, userId: Long) {
