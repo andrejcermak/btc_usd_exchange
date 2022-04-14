@@ -6,11 +6,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
 namespace testApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class UserController : ControllerBase
     {
         private readonly ExchangeContext _context;
@@ -24,6 +28,9 @@ namespace testApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<User>>> GetUser()
         {
+            ClaimsPrincipal currentUser = this.User;
+            var currentUserName = currentUser.FindFirst(ClaimTypes.Name).Value;
+            Console.WriteLine("aaa" + currentUserName);
             return await _context.User.ToListAsync();
         }
 
@@ -75,6 +82,7 @@ namespace testApi.Controllers
         // POST: api/User
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
+        [AllowAnonymous]
         public async Task<ActionResult<User>> PostUser(User user)
         {
             _context.User.Add(user);
@@ -82,7 +90,7 @@ namespace testApi.Controllers
 
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
         }
-        [HttpPost]
+        [HttpPost("{id}/fund")]
         public async Task<ActionResult<User>> PostFunding(int id, TopUpRequest request)
         {
             var user = await _context.User.FindAsync(id);

@@ -13,7 +13,7 @@ using TestApi.Models;
         {
         }
 
-        public DbSet<User> User => Set<User>();
+    public DbSet<User> User => Set<User>(); 
 
-        public DbSet<StandingOrder> StandingOrder => Set<StandingOrder>();
+    public DbSet<StandingOrder> StandingOrder => Set<StandingOrder>();
     }

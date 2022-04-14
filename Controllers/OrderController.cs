@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +14,7 @@ namespace testApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class OrderController : ControllerBase
     {
         private readonly ExchangeContext _context;
@@ -23,6 +26,7 @@ namespace testApi.Controllers
 
         // GET: api/Order
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<StandingOrder>>> GetStandingOrder()
         {
             return await _context.StandingOrder.ToListAsync();
@@ -30,6 +34,7 @@ namespace testApi.Controllers
 
         // GET: api/Order/5
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<StandingOrder>> GetStandingOrder(int id)
         {
             var standingOrder = await _context.StandingOrder.FindAsync(id);
@@ -75,10 +80,11 @@ namespace testApi.Controllers
 
         // POST: api/Order
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost("/standing")]
+        [HttpPost]
         public async Task<ActionResult<StandingOrder>> PostStandingOrder(StandingOrder standingOrder)
         {
-            var user = await _context.User.FindAsync("1");
+            Console.WriteLine(this.User.FindFirst(ClaimTypes.NameIdentifier).Value);
+            var user = await _context.User.FindAsync(Int32.Parse(this.User.FindFirst(ClaimTypes.NameIdentifier).Value));
             if(user is null) return NotFound();
             var orders = await _context.StandingOrder.Select(x=> x).ToListAsync();
             var filteredOrders = orders.Where(it => (standingOrder.type == OrderType.Buy) ? it.limit <= standingOrder.limit : it.limit > standingOrder.limit).OrderBy(it => it.limit);
@@ -99,7 +105,7 @@ namespace testApi.Controllers
             await _context.SaveChangesAsync();
             return CreatedAtAction("GetStandingOrder", new { id = newStandingOrder.Id }, newStandingOrder);
         }
-        [HttpPost("/standing")]
+        [HttpPost("/market")]
         public async Task<ActionResult<StandingOrder>> PostMarketOrder(MarketOrderRequest request)
         {
             var user = await _context.User.FindAsync("1");
@@ -116,8 +122,6 @@ namespace testApi.Controllers
         [HttpDelete("/standing/{id}")]
         public async Task<IActionResult> DeleteStandingOrder(int id)
         {
-
-
             return NoContent();
             var user = await _context.User.FindAsync("1");
             var order = await _context.StandingOrder.FindAsync(id);

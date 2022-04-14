@@ -2,13 +2,13 @@ public class User
 {
     
     public int Id { get; set; }
-    public string? Name { get; set; }
+    public decimal Satoshis { get; set; } = 0;
+    public decimal USDBalance { get; set; } = 0;
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Username { get; set; }
+    public string Password  { get; set; }
 
-    public decimal Satoshis = 0;
-
-    public decimal USDBalance = 0;
-
-    public string Token = "token";
 
     private void SetBalance(Currency currency, Decimal amount)
     {

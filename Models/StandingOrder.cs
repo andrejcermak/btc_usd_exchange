@@ -9,9 +9,9 @@ namespace TestApi.Models
         // }
         public int Id { get; set; }
 
-        public decimal quantity = 0;
-        public OrderType type = OrderType.Buy;
-        public decimal limit = 0;
+        public decimal quantity { get; set; } = 0;
+        public OrderType type { get; set; } = OrderType.Buy;
+        public decimal limit { get; set; } = 0;
         public User user = new User();
 
 
